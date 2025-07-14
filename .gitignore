@@ -27,7 +27,10 @@ MANIFEST
 venv/
 ENV/
 env/
+
+# Environment files
 .env
+!.env.example
 
 # IDE
 .vscode/
@@ -41,14 +44,10 @@ env/
 .AppleDouble
 .LSOverride
 
-# Output files
-*.png
-*.jpg
-*.pdf
+# Output files (but keep example outputs)
+reliability_analysis_output.png
 results/
 output/
-
-# Logs
 *.log
 
 # Temporary files

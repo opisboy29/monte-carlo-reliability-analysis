@@ -3,7 +3,7 @@
 Monte Carlo Reliability Analysis Framework
 A comprehensive tool for analyzing system reliability using Monte Carlo simulation
 
-Author: Your Name
+Author: opisboy29
 License: MIT
 Purpose: Statistical analysis for hardware upgrade decisions and reliability assessment
 """
@@ -18,9 +18,10 @@ import sys
 from typing import Dict, Any, List, Tuple
 
 # Import python-dotenv for configuration management
+DOTENV_AVAILABLE = False
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    DOTENV_AVAILABLE = True
 except ImportError:
     print("⚠️  python-dotenv not installed. Install with: pip install python-dotenv")
     print("📄 Using default values...")
@@ -32,87 +33,92 @@ class ReliabilityConfig:
     """
     
     def __init__(self, config_file: str = '.env'):
-        if os.path.exists(config_file):
+        if DOTENV_AVAILABLE and os.path.exists(config_file):
             load_dotenv(config_file)
         self.config = self._load_config()
         
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from environment variables with fallback values"""
+        confidence_level = int(os.getenv('CONFIDENCE_LEVEL', 95))
         
         return {
-            # Simulation Parameters
+            # Simulation parameters
             'n_simulations': int(os.getenv('N_SIMULATIONS', 10000)),
             'random_seed': int(os.getenv('RANDOM_SEED', 42)),
-            'confidence_level': float(os.getenv('CONFIDENCE_LEVEL', 95)),
+            'confidence_level': confidence_level,
             
-            # Current System Failure Rates (FIT - Failures In Time per billion hours)
-            'current_cpu_fit': float(os.getenv('CURRENT_CPU_FIT', 50e-9)),
-            'current_hdd_fit': float(os.getenv('CURRENT_HDD_FIT', 0)),
-            'current_ssd_fit': float(os.getenv('CURRENT_SSD_FIT', 150e-9)),
-            'current_ram_fit': float(os.getenv('CURRENT_RAM_FIT', 100e-9)),
+            # Statistical analysis parameters
+            'percentile_lower': (100 - confidence_level) / 2,
+            'percentile_upper': 100 - (100 - confidence_level) / 2,
+            'failure_threshold_hours': float(os.getenv('FAILURE_THRESHOLD_HOURS', 72)),
             
-            # Upgraded System Failure Rates (FIT)
-            'upgraded_cpu_fit': float(os.getenv('UPGRADED_CPU_FIT', 30e-9)),
-            'upgraded_ssd_fit': float(os.getenv('UPGRADED_SSD_ENTERPRISE_FIT', 50e-9)),
-            'upgraded_ram_fit': float(os.getenv('UPGRADED_RAM_FIT', 80e-9)),
+            # Visualization settings
+            'plot_style': os.getenv('PLOT_STYLE', 'default'),
+            'figure_width': float(os.getenv('FIGURE_WIDTH', 16)),
+            'figure_height': float(os.getenv('FIGURE_HEIGHT', 12)),
+            'dpi': int(os.getenv('DPI', 300)),
+            'save_plots': os.getenv('SAVE_PLOTS', 'true').lower() == 'true',
+            'output_filename': os.getenv('OUTPUT_FILENAME', 'reliability_analysis_output.png'),
             
-            # Current System Configuration
+            # CURRENT SYSTEM: Mixed quality hardware
             'current_cpu_count': int(os.getenv('CURRENT_CPU_COUNT', 14)),
-            'current_hdd_count': int(os.getenv('CURRENT_HDD_COUNT', 0)),
-            'current_ssd_count': int(os.getenv('CURRENT_SSD_COUNT', 24)),
+            'current_hdd_count': int(os.getenv('CURRENT_HDD_COUNT', 2)),      # R440 has 2 HDD
+            'current_ssd_count': int(os.getenv('CURRENT_SSD_COUNT', 22)),     # Rest are SSD
             'current_ram_count': int(os.getenv('CURRENT_RAM_COUNT', 32)),
+            'current_psu_count': int(os.getenv('CURRENT_PSU_COUNT', 7)),      # Single PSU per server
             
-            # Upgraded System Configuration
-            'upgraded_cpu_count': int(os.getenv('UPGRADED_CPU_COUNT', 14)),
-            'upgraded_hdd_count': int(os.getenv('UPGRADED_HDD_COUNT', 0)),
-            'upgraded_ssd_count': int(os.getenv('UPGRADED_SSD_COUNT', 42)),
-            'upgraded_ram_count': int(os.getenv('UPGRADED_RAM_COUNT', 56)),
+            # UPGRADED SYSTEM: Enterprise grade replacements + redundancy
+            'upgraded_cpu_count': int(os.getenv('UPGRADED_CPU_COUNT', 14)),   # Same count, better CPU
+            'upgraded_hdd_count': int(os.getenv('UPGRADED_HDD_COUNT', 0)),    # All HDD replaced
+            'upgraded_ssd_count': int(os.getenv('UPGRADED_SSD_COUNT', 24)),   # All enterprise SSD
+            'upgraded_ram_count': int(os.getenv('UPGRADED_RAM_COUNT', 32)),   # Same count, ECC RAM
+            'upgraded_psu_count': int(os.getenv('UPGRADED_PSU_COUNT', 14)),   # Redundant PSU
             
-            # Visualization Settings
-            'plot_style': os.getenv('PLOT_STYLE', 'seaborn-v0_8'),
-            'figure_width': int(os.getenv('FIGURE_SIZE_WIDTH', 15)),
-            'figure_height': int(os.getenv('FIGURE_SIZE_HEIGHT', 12)),
-            'plot_dpi': int(os.getenv('PLOT_DPI', 300)),
-            'output_filename': os.getenv('OUTPUT_FILENAME', 'reliability_analysis.png'),
+            # CURRENT FIT RATES (Conservative estimates)
+            'current_cpu_fit': float(os.getenv('CURRENT_CPU_FIT', 150e-9)),   # Mixed Silver CPUs
+            'current_hdd_fit': float(os.getenv('CURRENT_HDD_FIT', 1200e-9)),  # 7200rpm SATA
+            'current_ssd_fit': float(os.getenv('CURRENT_SSD_FIT', 300e-9)),   # Mixed SSD quality
+            'current_ram_fit': float(os.getenv('CURRENT_RAM_FIT', 100e-9)),   # Standard DDR4
+            'current_psu_fit': float(os.getenv('CURRENT_PSU_FIT', 200e-9)),   # Single PSU risk
             
-            # Analysis Parameters
-            'failure_threshold_hours': float(os.getenv('FAILURE_TIME_THRESHOLD_HOURS', 24)),
-            'percentile_lower': float(os.getenv('PERCENTILE_LOWER', 2.5)),
-            'percentile_upper': float(os.getenv('PERCENTILE_UPPER', 97.5)),
+            # UPGRADED FIT RATES (Enterprise grade)
+            'upgraded_cpu_fit': float(os.getenv('UPGRADED_CPU_FIT', 80e-9)),   # Platinum CPUs
+            'upgraded_hdd_fit': float(os.getenv('UPGRADED_HDD_FIT', 0)),       # No HDD
+            'upgraded_ssd_fit': float(os.getenv('UPGRADED_SSD_FIT', 50e-9)),   # Enterprise SSD
+            'upgraded_ram_fit': float(os.getenv('UPGRADED_RAM_FIT', 40e-9)),   # ECC DDR4
+            'upgraded_psu_fit': float(os.getenv('UPGRADED_PSU_FIT', 80e-9)),   # Redundant PSU
             
-            # Business Context (optional)
-            'organization_name': os.getenv('ORGANIZATION_NAME', 'Your Organization'),
-            'system_name': os.getenv('SYSTEM_NAME', 'IT Infrastructure'),
-            'analyst_name': os.getenv('ANALYST_NAME', 'System Analyst'),
+            # Analysis settings
+            'system_name': os.getenv('SYSTEM_NAME', 'Enterprise Server Infrastructure'),
+            'analysis_purpose': os.getenv('ANALYSIS_PURPOSE', 'Hardware Upgrade ROI Analysis')
         }
     
     def get(self, key: str, default=None):
-        """Get configuration value"""
+        """Get configuration value by key"""
         return self.config.get(key, default)
     
     def display_config(self):
-        """Display current configuration in human-readable format"""
-        print("="*80)
-        print(f"RELIABILITY ANALYSIS CONFIGURATION - {self.config['system_name']}")
-        print("="*80)
+        """Display current configuration in a readable format"""
+        print("\n📋 CONFIGURATION SUMMARY:")
+        print("=" * 60)
         
-        print("\n📊 SIMULATION PARAMETERS:")
-        print(f"  • Number of simulations: {self.config['n_simulations']:,}")
-        print(f"  • Confidence level: {self.config['confidence_level']}%")
-        print(f"  • Random seed: {self.config['random_seed']} (for reproducibility)")
+        print(f"🎯 System: {self.get('system_name')}")
+        print(f"📊 Purpose: {self.get('analysis_purpose')}")
+        print(f"🔄 Simulations: {self.get('n_simulations'):,}")
+        print(f"🎲 Random Seed: {self.get('random_seed')}")
         
-        print("\n🖥️ CURRENT SYSTEM:")
-        print(f"  • CPUs: {self.config['current_cpu_count']} units")
-        print(f"  • HDDs: {self.config['current_hdd_count']} units")
-        print(f"  • SSDs: {self.config['current_ssd_count']} units")
-        print(f"  • RAM modules: {self.config['current_ram_count']} units")
+        print(f"\n💾 CURRENT SYSTEM:")
+        print(f"   CPU: {self.get('current_cpu_count')} units")
+        print(f"   HDD: {self.get('current_hdd_count')} units")
+        print(f"   SSD: {self.get('current_ssd_count')} units")
+        print(f"   RAM: {self.get('current_ram_count')} modules")
         
-        print("\n🚀 UPGRADED SYSTEM:")
-        print(f"  • CPUs: {self.config['upgraded_cpu_count']} units")
-        print(f"  • HDDs: {self.config['upgraded_hdd_count']} units")
-        print(f"  • SSDs: {self.config['upgraded_ssd_count']} units")
-        print(f"  • RAM modules: {self.config['upgraded_ram_count']} units")
-        print()
+        print(f"\n🚀 UPGRADED SYSTEM:")
+        print(f"   CPU: {self.get('upgraded_cpu_count')} units")
+        print(f"   HDD: {self.get('upgraded_hdd_count')} units")
+        print(f"   SSD: {self.get('upgraded_ssd_count')} units")
+        print(f"   RAM: {self.get('upgraded_ram_count')} modules")
+        print("=" * 60)
 
 class MonteCarloReliabilityAnalyzer:
     """
@@ -192,44 +198,85 @@ class MonteCarloReliabilityAnalyzer:
         # === ANALYSIS AND REPORTING ===
         return self._analyze_results(current_results, upgraded_results)
     
+    def _calculate_system_reliability(self, cpu_count: int, hdd_count: int, ssd_count: int, 
+                                    ram_count: int, psu_count: int, cpu_fit: float, 
+                                    hdd_fit: float, ssd_fit: float, ram_fit: float, 
+                                    psu_fit: float, system_type: str) -> float:
+        """
+        Calculate system failure rate using enterprise redundancy model
+        """
+        # CPU subsystem (N-way redundancy with load balancing)
+        cpu_subsystem_rate = cpu_count * cpu_fit
+        
+        # Storage subsystem with RAID modeling
+        if hdd_count > 0:
+            # RAID 1/5/6 provides redundancy - only critical if multiple drives fail
+            hdd_subsystem_rate = (hdd_count * hdd_fit * hdd_fit) / (hdd_count - 1) if hdd_count > 1 else hdd_count * hdd_fit
+        else:
+            hdd_subsystem_rate = 0
+            
+        if ssd_count > 0:
+            # Enterprise SSD RAID - high redundancy
+            ssd_subsystem_rate = (ssd_count * ssd_fit * ssd_fit) / max(1, ssd_count - 2) if ssd_count > 2 else ssd_count * ssd_fit * 0.5
+        else:
+            ssd_subsystem_rate = 0
+            
+        storage_subsystem_rate = hdd_subsystem_rate + ssd_subsystem_rate
+        
+        # Memory subsystem (ECC provides error correction)
+        # Multiple memory channels provide some redundancy
+        memory_subsystem_rate = ram_count * ram_fit * 0.3  # ECC reduces effective failure rate
+        
+        # Power subsystem
+        if psu_count >= 14:  # Redundant PSU (N+N)
+            psu_subsystem_rate = (psu_count / 2) * psu_fit * psu_fit  # Both PSUs must fail
+        else:  # Single PSU per server
+            psu_subsystem_rate = psu_count * psu_fit
+        
+        # System failure rate (critical subsystems in series)
+        total_system_rate = (
+            cpu_subsystem_rate + 
+            storage_subsystem_rate + 
+            memory_subsystem_rate + 
+            psu_subsystem_rate
+        )
+        
+        return total_system_rate
+
     def _simulate_system_reliability(self, cpu_count: int, hdd_count: int, ssd_count: int, 
                                    ram_count: int, cpu_fit: float, hdd_fit: float, 
                                    ssd_fit: float, ram_fit: float, system_type: str) -> np.ndarray:
         """
-        Simulate system reliability for given configuration
+        Simulate system reliability using enterprise redundancy model
         """
         print(f"📊 ANALYZING {system_type.upper()} SYSTEM:")
         print("   " + "="*50)
         
-        # Define probability distributions for each component type
-        cpu_dist = stats.expon(scale=1/cpu_fit) if cpu_count > 0 else None
-        hdd_dist = stats.weibull_min(c=1.5, scale=1/hdd_fit) if hdd_count > 0 else None
-        ssd_dist = stats.gamma(a=2, scale=1/(2*ssd_fit)) if ssd_count > 0 else None
-        ram_dist = stats.expon(scale=1/ram_fit) if ram_count > 0 else None
+        # Get PSU configuration
+        psu_count = self.config.get(f'{system_type}_psu_count', 7)
+        psu_fit = self.config.get(f'{system_type}_psu_fit', 200e-9)
         
+        # Calculate system failure rate with redundancy
+        system_failure_rate = self._calculate_system_reliability(
+            cpu_count, hdd_count, ssd_count, ram_count, psu_count,
+            cpu_fit, hdd_fit, ssd_fit, ram_fit, psu_fit, system_type
+        )
+        
+        # Calculate theoretical MTBF
+        mtbf_hours = 1 / system_failure_rate
+        mtbf_years = mtbf_hours / 8760
+        
+        print(f"   🔧 Components: {cpu_count} CPU, {hdd_count} HDD, {ssd_count} SSD, {ram_count} RAM, {psu_count} PSU")
+        print(f"   ⚡ System failure rate: {system_failure_rate:.2e} failures/hour")
+        print(f"   ⏱️  Theoretical MTBF: {mtbf_years:.1f} years ({mtbf_hours/24:.0f} days)")
+        
+        # Monte Carlo simulation
+        system_dist = stats.expon(scale=1/system_failure_rate)
         n_simulations = self.config.get('n_simulations')
-        results = []
         
-        for i in range(n_simulations):
-            failures = []
-            
-            # Sample failure times for each component type
-            if cpu_dist and cpu_count > 0:
-                failures.extend([cpu_dist.rvs() for _ in range(cpu_count)])
-            if hdd_dist and hdd_count > 0:
-                failures.extend([hdd_dist.rvs() for _ in range(hdd_count)])
-            if ssd_dist and ssd_count > 0:
-                failures.extend([ssd_dist.rvs() for _ in range(ssd_count)])
-            if ram_dist and ram_count > 0:
-                failures.extend([ram_dist.rvs() for _ in range(ram_count)])
-            
-            # System fails when first component fails (series reliability)
-            if failures:
-                system_failure_time = min(failures)
-                results.append(system_failure_time)
+        results_hours = system_dist.rvs(n_simulations)
         
-        # Convert to hours and analyze
-        results_hours = np.array(results) * 1e9
+        # Statistical analysis
         mtbf_mean = np.mean(results_hours)
         confidence_interval = np.percentile(results_hours, [
             self.config.get('percentile_lower'), 
@@ -239,7 +286,7 @@ class MonteCarloReliabilityAnalyzer:
         failure_probability = np.mean(results_hours < failure_threshold) * 100
         
         # Display results
-        print(f"   📈 RESULTS:")
+        print(f"   📈 SIMULATION RESULTS:")
         print(f"   • Mean time between failures: {self._format_time_period(mtbf_mean)}")
         print(f"   • Failure probability ({failure_threshold}h): {self._categorize_risk(failure_probability)}")
         print(f"   • {self.config.get('confidence_level')}% confidence interval: {confidence_interval[0]/24:.1f} - {confidence_interval[1]/24:.1f} days")
@@ -264,9 +311,16 @@ class MonteCarloReliabilityAnalyzer:
         upgraded_failure_prob = np.mean(upgraded_results < failure_threshold) * 100
         risk_reduction = (current_failure_prob - upgraded_failure_prob) / current_failure_prob * 100 if current_failure_prob > 0 else 0
         
+        # Calculate additional uptime per year (correct formula)
+        hours_per_year = 8760
+        current_downtime_per_year = hours_per_year / current_mtbf
+        upgraded_downtime_per_year = hours_per_year / upgraded_mtbf
+        additional_uptime_per_year = (current_downtime_per_year - upgraded_downtime_per_year) * hours_per_year
+        
         print(f"   ✅ Reliability improvement: {reliability_improvement:.1f}%")
         print(f"   ✅ Risk reduction: {risk_reduction:.1f}%")
-        print(f"   ✅ Additional uptime per year: {(upgraded_mtbf - current_mtbf) * 365/24:.0f} hours")
+        print(f"   ✅ Additional uptime per year: {additional_uptime_per_year:.1f} hours")
+        print(f"   ⏰ Reduced downtime per year: {(current_downtime_per_year - upgraded_downtime_per_year)*24:.1f} minutes")
         print()
         
         # Generate visualizations
@@ -292,16 +346,22 @@ class MonteCarloReliabilityAnalyzer:
         """
         Create comprehensive visualization dashboard
         """
+        # Handle matplotlib style safely
+        plot_style = self.config.get('plot_style', 'default')
         try:
-            plt.style.use(self.config.get('plot_style'))
-        except OSError:
-            print(f"⚠️  Style '{self.config.get('plot_style')}' not available. Using default.")
+            if plot_style and plot_style != 'default':
+                plt.style.use(plot_style)
+            else:
+                plt.style.use('default')
+        except (OSError, TypeError) as e:
+            print(f"⚠️  Style '{plot_style}' not available. Using default.")
             plt.style.use('default')
         
-        fig, axes = plt.subplots(2, 2, figsize=(
-            self.config.get('figure_width'), 
-            self.config.get('figure_height')
-        ))
+        # Get figure dimensions safely
+        fig_width = self.config.get('figure_width', 16)
+        fig_height = self.config.get('figure_height', 12)
+        
+        fig, axes = plt.subplots(2, 2, figsize=(fig_width, fig_height))
         fig.suptitle(f'Reliability Analysis Results - {self.config.get("system_name")}', 
                      fontsize=16, fontweight='bold')
         
@@ -388,7 +448,7 @@ class MonteCarloReliabilityAnalyzer:
         
         # Save the plot
         output_file = self.config.get('output_filename')
-        plt.savefig(output_file, dpi=self.config.get('plot_dpi'), bbox_inches='tight')
+        plt.savefig(output_file, dpi=self.config.get('dpi'), bbox_inches='tight')
         print(f"📊 Visualization saved as '{output_file}'")
         
         plt.show()
