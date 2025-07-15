@@ -153,10 +153,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you have questions or need help:
 
-1. Check the [documentation](docs/)
-2. Look at [examples](examples/)
-3. Open an [issue](https://github.com/yourusername/monte-carlo-reliability-analysis/issues)
-4. Connect on [LinkedIn](https://linkedin.com/in/yourprofile)
+1.. Connect on [LinkedIn](https://www.linkedin.com/in/nabima-reyhan-687b1b130/)
 
 ---
 
