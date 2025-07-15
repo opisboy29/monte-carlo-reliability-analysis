@@ -38,7 +38,7 @@ class ReliabilityConfig:
         self.config = self._load_config()
         
     def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from environment variables with fallback values"""
+        """Load configuration from environment variables with realistic defaults"""
         confidence_level = int(os.getenv('CONFIDENCE_LEVEL', 95))
         
         return {
@@ -60,33 +60,33 @@ class ReliabilityConfig:
             'save_plots': os.getenv('SAVE_PLOTS', 'true').lower() == 'true',
             'output_filename': os.getenv('OUTPUT_FILENAME', 'reliability_analysis_output.png'),
             
-            # CURRENT SYSTEM: Mixed quality hardware
+            # CURRENT SYSTEM: Realistic mixed hardware (more conservative)
             'current_cpu_count': int(os.getenv('CURRENT_CPU_COUNT', 14)),
-            'current_hdd_count': int(os.getenv('CURRENT_HDD_COUNT', 2)),      # R440 has 2 HDD
-            'current_ssd_count': int(os.getenv('CURRENT_SSD_COUNT', 22)),     # Rest are SSD
+            'current_hdd_count': int(os.getenv('CURRENT_HDD_COUNT', 2)),      
+            'current_ssd_count': int(os.getenv('CURRENT_SSD_COUNT', 22)),     
             'current_ram_count': int(os.getenv('CURRENT_RAM_COUNT', 32)),
-            'current_psu_count': int(os.getenv('CURRENT_PSU_COUNT', 7)),      # Single PSU per server
+            'current_psu_count': int(os.getenv('CURRENT_PSU_COUNT', 7)),      
             
-            # UPGRADED SYSTEM: Enterprise grade replacements + redundancy
-            'upgraded_cpu_count': int(os.getenv('UPGRADED_CPU_COUNT', 14)),   # Same count, better CPU
-            'upgraded_hdd_count': int(os.getenv('UPGRADED_HDD_COUNT', 0)),    # All HDD replaced
-            'upgraded_ssd_count': int(os.getenv('UPGRADED_SSD_COUNT', 24)),   # All enterprise SSD
-            'upgraded_ram_count': int(os.getenv('UPGRADED_RAM_COUNT', 32)),   # Same count, ECC RAM
-            'upgraded_psu_count': int(os.getenv('UPGRADED_PSU_COUNT', 14)),   # Redundant PSU
+            # UPGRADED SYSTEM: Enterprise grade with redundancy
+            'upgraded_cpu_count': int(os.getenv('UPGRADED_CPU_COUNT', 14)),   
+            'upgraded_hdd_count': int(os.getenv('UPGRADED_HDD_COUNT', 0)),    
+            'upgraded_ssd_count': int(os.getenv('UPGRADED_SSD_COUNT', 24)),   
+            'upgraded_ram_count': int(os.getenv('UPGRADED_RAM_COUNT', 32)),   
+            'upgraded_psu_count': int(os.getenv('UPGRADED_PSU_COUNT', 14)),   
             
-            # CURRENT FIT RATES (Conservative estimates)
-            'current_cpu_fit': float(os.getenv('CURRENT_CPU_FIT', 150e-9)),   # Mixed Silver CPUs
-            'current_hdd_fit': float(os.getenv('CURRENT_HDD_FIT', 1200e-9)),  # 7200rpm SATA
-            'current_ssd_fit': float(os.getenv('CURRENT_SSD_FIT', 300e-9)),   # Mixed SSD quality
-            'current_ram_fit': float(os.getenv('CURRENT_RAM_FIT', 100e-9)),   # Standard DDR4
-            'current_psu_fit': float(os.getenv('CURRENT_PSU_FIT', 200e-9)),   # Single PSU risk
+            # REALISTIC CURRENT FIT RATES (Industry conservative estimates)
+            'current_cpu_fit': float(os.getenv('CURRENT_CPU_FIT', 250e-9)),   # 250 FIT (mixed CPUs)
+            'current_hdd_fit': float(os.getenv('CURRENT_HDD_FIT', 2500e-9)),  # 2500 FIT (consumer SATA)
+            'current_ssd_fit': float(os.getenv('CURRENT_SSD_FIT', 800e-9)),   # 800 FIT (mixed SSD)
+            'current_ram_fit': float(os.getenv('CURRENT_RAM_FIT', 200e-9)),   # 200 FIT (standard DDR4)
+            'current_psu_fit': float(os.getenv('CURRENT_PSU_FIT', 400e-9)),   # 400 FIT (single PSU)
             
-            # UPGRADED FIT RATES (Enterprise grade)
-            'upgraded_cpu_fit': float(os.getenv('UPGRADED_CPU_FIT', 80e-9)),   # Platinum CPUs
+            # REALISTIC UPGRADED FIT RATES (Enterprise grade)
+            'upgraded_cpu_fit': float(os.getenv('UPGRADED_CPU_FIT', 150e-9)),  # 150 FIT (Platinum)
             'upgraded_hdd_fit': float(os.getenv('UPGRADED_HDD_FIT', 0)),       # No HDD
-            'upgraded_ssd_fit': float(os.getenv('UPGRADED_SSD_FIT', 50e-9)),   # Enterprise SSD
-            'upgraded_ram_fit': float(os.getenv('UPGRADED_RAM_FIT', 40e-9)),   # ECC DDR4
-            'upgraded_psu_fit': float(os.getenv('UPGRADED_PSU_FIT', 80e-9)),   # Redundant PSU
+            'upgraded_ssd_fit': float(os.getenv('UPGRADED_SSD_FIT', 200e-9)),  # 200 FIT (enterprise SSD)
+            'upgraded_ram_fit': float(os.getenv('UPGRADED_RAM_FIT', 100e-9)),  # 100 FIT (ECC DDR4)
+            'upgraded_psu_fit': float(os.getenv('UPGRADED_PSU_FIT', 200e-9)),  # 200 FIT (redundant PSU)
             
             # Analysis settings
             'system_name': os.getenv('SYSTEM_NAME', 'Enterprise Server Infrastructure'),
@@ -203,42 +203,48 @@ class MonteCarloReliabilityAnalyzer:
                                     hdd_fit: float, ssd_fit: float, ram_fit: float, 
                                     psu_fit: float, system_type: str) -> float:
         """
-        Calculate system failure rate using enterprise redundancy model
+        Calculate system failure rate using realistic enterprise redundancy model
+        More conservative approach aligned with industry experience
         """
-        # CPU subsystem (N-way redundancy with load balancing)
-        cpu_subsystem_rate = cpu_count * cpu_fit
+        # CPU subsystem (load balancing provides minimal redundancy)
+        cpu_subsystem_rate = cpu_count * cpu_fit * 0.8  # 20% load balancing benefit
         
-        # Storage subsystem with RAID modeling
+        # Storage subsystem with realistic RAID modeling
         if hdd_count > 0:
-            # RAID 1/5/6 provides redundancy - only critical if multiple drives fail
-            hdd_subsystem_rate = (hdd_count * hdd_fit * hdd_fit) / (hdd_count - 1) if hdd_count > 1 else hdd_count * hdd_fit
+            # Single HDD failure can cause issues despite RAID
+            hdd_subsystem_rate = hdd_count * hdd_fit * 0.9  # 10% RAID benefit
         else:
             hdd_subsystem_rate = 0
             
         if ssd_count > 0:
-            # Enterprise SSD RAID - high redundancy
-            ssd_subsystem_rate = (ssd_count * ssd_fit * ssd_fit) / max(1, ssd_count - 2) if ssd_count > 2 else ssd_count * ssd_fit * 0.5
+            # RAID 5/6 provides good but not perfect redundancy
+            if ssd_count >= 3:
+                ssd_subsystem_rate = ssd_count * ssd_fit * 0.6  # 40% RAID benefit
+            else:
+                ssd_subsystem_rate = ssd_count * ssd_fit * 0.8  # 20% RAID benefit
         else:
             ssd_subsystem_rate = 0
             
         storage_subsystem_rate = hdd_subsystem_rate + ssd_subsystem_rate
         
-        # Memory subsystem (ECC provides error correction)
-        # Multiple memory channels provide some redundancy
-        memory_subsystem_rate = ram_count * ram_fit * 0.3  # ECC reduces effective failure rate
+        # Memory subsystem (ECC helps but doesn't eliminate failures)
+        memory_subsystem_rate = ram_count * ram_fit * 0.85  # 15% ECC benefit
         
-        # Power subsystem
+        # Power subsystem (realistic redundancy modeling)
         if psu_count >= 14:  # Redundant PSU (N+N)
-            psu_subsystem_rate = (psu_count / 2) * psu_fit * psu_fit  # Both PSUs must fail
+            # Both PSUs must fail, but shared components still create risk
+            psu_subsystem_rate = (psu_count / 2) * psu_fit * 0.3  # Significant redundancy
         else:  # Single PSU per server
             psu_subsystem_rate = psu_count * psu_fit
         
-        # System failure rate (critical subsystems in series)
+        # System failure rate (critical subsystems - more realistic)
         total_system_rate = (
             cpu_subsystem_rate + 
             storage_subsystem_rate + 
             memory_subsystem_rate + 
-            psu_subsystem_rate
+            psu_subsystem_rate +
+            # Add system-level failures (cooling, motherboard, etc.)
+            cpu_count * 50e-9  # System overhead: 50 FIT per server
         )
         
         return total_system_rate
@@ -311,16 +317,16 @@ class MonteCarloReliabilityAnalyzer:
         upgraded_failure_prob = np.mean(upgraded_results < failure_threshold) * 100
         risk_reduction = (current_failure_prob - upgraded_failure_prob) / current_failure_prob * 100 if current_failure_prob > 0 else 0
         
-        # Calculate additional uptime per year (correct formula)
+        # Calculate reduced downtime per year (CORRECTED FORMULA)
         hours_per_year = 8760
         current_downtime_per_year = hours_per_year / current_mtbf
         upgraded_downtime_per_year = hours_per_year / upgraded_mtbf
-        additional_uptime_per_year = (current_downtime_per_year - upgraded_downtime_per_year) * hours_per_year
+        reduced_downtime_per_year = current_downtime_per_year - upgraded_downtime_per_year
         
         print(f"   ✅ Reliability improvement: {reliability_improvement:.1f}%")
         print(f"   ✅ Risk reduction: {risk_reduction:.1f}%")
-        print(f"   ✅ Additional uptime per year: {additional_uptime_per_year:.1f} hours")
-        print(f"   ⏰ Reduced downtime per year: {(current_downtime_per_year - upgraded_downtime_per_year)*24:.1f} minutes")
+        print(f"   ✅ Reduced downtime per year: {reduced_downtime_per_year:.2f} hours ({reduced_downtime_per_year*60:.1f} minutes)")
+        print(f"   ⏰ Current downtime: {current_downtime_per_year*60:.1f} min/year → Upgraded: {upgraded_downtime_per_year*60:.1f} min/year")
         print()
         
         # Generate visualizations
@@ -334,10 +340,12 @@ class MonteCarloReliabilityAnalyzer:
             'risk_reduction_percent': risk_reduction,
             'current_failure_probability': current_failure_prob,
             'upgraded_failure_probability': upgraded_failure_prob,
+            'reduced_downtime_hours_per_year': reduced_downtime_per_year,
             'current_results': current_results,
             'upgraded_results': upgraded_results
         }
         
+        # Print executive summary
         self._print_executive_summary(results)
         
         return results
